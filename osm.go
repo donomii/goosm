@@ -9,7 +9,7 @@ import (
     "strings"
     "regexp"
     "strconv"
-    "code.google.com/p/gos2/s2"
+    "github.com/timehop/gos2/s2"
 )
 
 type Tag struct {
@@ -45,6 +45,19 @@ type Node struct {
     Lon string `xml:"lon,attr"`
 }
 
+//'id', 'version', 'changeset', 'user', 'uid', 'visible', 'timestamp', 'tags', 'loc'
+type Trackpoint struct {
+    Id string `xml:"id,attr"`
+    Version string `xml:"version,attr"`
+    Changeset string `xml:"changeset,attr"`
+    User string `xml:"user,attr"`
+    Uid string `xml:"uid,attr"`
+    Visible string `xml:"visible,attr"`
+    Timestamp string `xml:"timestamp,attr"`
+    Tags []Tag `xml:"tag"`
+    Lat string `xml:"lat,attr"`
+    Lon string `xml:"lon,attr"`
+}
 //'id', 'version', 'changeset', 'user', 'uid', 'visible', 'timestamp', 'tags', 'nds'
 type Way struct {
     Id string `xml:"id,attr"`
@@ -198,7 +211,7 @@ func main() {
     relationsFile, _ := os.Create("relations.csv.gz")
     relationsOut := csv.NewWriter(gzip.NewWriter(relationsFile))
 
-    var nodes, ways, relations, changesets, prims int
+    var nodes, ways, relations, changesets, prims, trackpoints int
 
     for token, err := decoder.Token(); err == nil; token, err = decoder.Token() {
         switch tag := token.(type) {
@@ -253,6 +266,25 @@ func main() {
                     ndsCSV(way.Nds),
                 })
                 ways++
+            case "trkpt":
+                node := Trackpoint{}
+                decoder.DecodeElement(&node, &tag)
+                // 'id', 'version', 'changeset', 'user', 'uid', 'visible', 'timestamp', 'tags', 'loc'
+                lat, _ := strconv.ParseFloat(node.Lat, 64)
+                lon, _ := strconv.ParseFloat(node.Lon, 64)
+                fmt.Printf("S2 for %f %f is %s\n", lat, lon, s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lon)).String())
+                nodesOut.Write([]string{
+                    node.Id,
+                    node.Version,
+                    node.Changeset,
+                    node.User,
+                    node.Uid,
+                    node.Visible,
+                    node.Timestamp,
+                    tagsCSV(node.Tags),
+                    emptyCheck(latLon(node.Lat, node.Lon)),
+                })
+                trackpoints++
             case "relation":
                 relation := Relation{}
                 decoder.DecodeElement(&relation, &tag)
@@ -275,13 +307,13 @@ func main() {
 
         if prims % 1000 == 0 {
             os.Stdout.Write([]byte("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"))
-            os.Stdout.Write([]byte(fmt.Sprintf("%8d changesets, %10d nodes, %8d ways, %7d relations", changesets, nodes, ways, relations)))
+            os.Stdout.Write([]byte(fmt.Sprintf("%v changesets, %v nodes, %v ways, %v relations, %v trackpoints", changesets, nodes, ways, relations, trackpoints)))
             os.Stdout.Sync()
         }
     }
 
     os.Stdout.Write([]byte("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"))
-    os.Stdout.Write([]byte(fmt.Sprintf("%8d changesets, %10d nodes, %8d ways, %7d relations", changesets, nodes, ways, relations)))
+    os.Stdout.Write([]byte(fmt.Sprintf("%v changesets, %v nodes, %v ways, %v relations, %v trackpoints", changesets, nodes, ways, relations, trackpoints)))
     os.Stdout.Sync()
 
     changesetsOut.Flush()
